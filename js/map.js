@@ -104,24 +104,28 @@ const MAP = (function() {
   }
 
   async function loadGeoJSON() {
-    try {
-      // Use a comprehensive world countries GeoJSON
-      const response = await fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/countries.geojson');
-      if (!response.ok) throw new Error('Failed to fetch GeoJSON');
-      const geoData = await response.json();
-      renderMap(geoData);
-    } catch (err) {
-      console.warn('Primary GeoJSON failed, trying fallback...', err);
+    // Try primary source first, then local fallback
+    const urls = [
+      'https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json',
+      'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson'
+    ];
+
+    for (const url of urls) {
       try {
-        const fb = await fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json');
-        const geoData = await fb.json();
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const geoData = await response.json();
+        console.log('GeoJSON loaded from:', url, '- features:', geoData.features.length);
         renderMap(geoData);
-      } catch (err2) {
-        console.error('Fallback GeoJSON also failed:', err2);
-        // Use embedded minimal GeoJSON if both fail
-        renderMap(getMinimalGeoJSON());
+        return;
+      } catch (err) {
+        console.warn('GeoJSON source failed:', url, err.message);
       }
     }
+
+    // Ultimate fallback: embedded minimal GeoJSON
+    console.warn('All remote sources failed, using minimal embedded GeoJSON');
+    renderMap(getMinimalGeoJSON());
   }
 
   function renderMap(geoData) {
@@ -165,8 +169,9 @@ const MAP = (function() {
               document.getElementById('hover-country').textContent =
                 `${proj.name} · Risk: ${proj.compositeRisk}/100 (${DATA.getRiskTier(proj.compositeRisk)})`;
             } else {
-              const name = feature.properties.name || feature.properties.ADMIN || iso || 'Unknown';
-              document.getElementById('hover-country').textContent = name;
+              const p = feature.properties || {};
+              const name = p.name || p.ADMIN || p.admin || p.sovereignt || iso || 'Unknown';
+              document.getElementById('hover-country').textContent = name + ' (no data)';
             }
           },
           mouseout: function(e) {
@@ -180,8 +185,9 @@ const MAP = (function() {
           }
         });
 
-        // Tooltip
-        const name = feature.properties.name || feature.properties.ADMIN || iso;
+        // Tooltip — try multiple name sources
+        const p = feature.properties || {};
+        const name = p.name || p.ADMIN || p.admin || p.sovereignt || p.NAME || p.name_long || iso || 'Unknown';
         layer.bindTooltip(name, {
           className: 'country-tooltip',
           sticky: false,
@@ -198,9 +204,13 @@ const MAP = (function() {
   }
 
   function getISO(feature) {
-    const p = feature.properties;
+    // Try feature.id first (johan/world.geo.json format: "AFG")
+    if (feature.id && typeof feature.id === 'string' && feature.id.length === 3) {
+      return feature.id;
+    }
+    const p = feature.properties || {};
     // Try multiple common GeoJSON property names
-    return p.ISO_A3 || p.iso_a3 || p.ISO3 || p.iso_3166_1_alpha_3 || p.ADM0_A3 || '';
+    return p.ISO_A3 || p.iso_a3 || p.ISO3 || p.iso_3166_1_alpha_3 || p.ADM0_A3 || p.iso_a3_eh || p.ISO_A3_EH || '';
   }
 
   function updateMapLayer(layerName) {
