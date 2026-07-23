@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Human Survivability Risk — World Map Dashboard</title>
+<meta name="description" content="Interactive world map dashboard tracking human survivability risks: climate change, pollution, poverty, inequality, and demographic shifts from 2025–2100.">
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Papa Parse for CSV -->
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ========== TOP HEADER BAR ========== -->
+<header class="top-bar">
+  <div class="top-bar-left">
+    <h1 class="app-title">Human Survivability Risk</h1>
+    <span class="app-subtitle">Global Risk Observatory · 2025–2100</span>
+  </div>
+  <div class="top-bar-center">
+    <div class="kpi-row" id="kpi-row">
+      <div class="kpi-card kpi-temp">
+        <span class="kpi-label">Global ΔT</span>
+        <span class="kpi-value" id="kpi-temp">+1.2°C</span>
+        <span class="kpi-change" id="kpi-temp-change">vs pre-industrial</span>
+      </div>
+      <div class="kpi-card kpi-risk">
+        <span class="kpi-label">At-Risk Population</span>
+        <span class="kpi-value" id="kpi-risk-pop">3.6B</span>
+        <span class="kpi-change" id="kpi-risk-change">45% of global</span>
+      </div>
+      <div class="kpi-card kpi-composite">
+        <span class="kpi-label">Composite Risk Index</span>
+        <span class="kpi-value" id="kpi-composite">62.4</span>
+        <span class="kpi-change" id="kpi-composite-change">/100 · Elevated</span>
+      </div>
+      <div class="kpi-card kpi-displaced">
+        <span class="kpi-label">Climate Displaced</span>
+        <span class="kpi-value" id="kpi-displaced">216M</span>
+        <span class="kpi-change" id="kpi-displaced-change">projected by 2050</span>
+      </div>
+    </div>
+  </div>
+  <div class="top-bar-right">
+    <button class="btn-scenario active" data-scenario="ssp245" id="btn-ssp245">SSP2-4.5</button>
+    <button class="btn-scenario" data-scenario="ssp370" id="btn-ssp370">SSP3-7.0</button>
+    <button class="btn-scenario" data-scenario="ssp585" id="btn-ssp585">SSP5-8.5</button>
+    <span class="scenario-label">Scenario</span>
+  </div>
+</header>
+
+<!-- ========== MAIN CONTENT AREA ========== -->
+<main class="main-content">
+  <!-- MAP PANEL -->
+  <section class="map-panel" id="map-panel">
+    <div id="world-map"></div>
+    <div class="map-legend" id="map-legend">
+      <span class="legend-title">Layer Intensity</span>
+      <div class="legend-gradient" id="legend-gradient"></div>
+      <div class="legend-labels">
+        <span>Low Risk</span>
+        <span>High Risk</span>
+      </div>
+    </div>
+    <div class="map-overlay-info" id="map-overlay-info">
+      <span id="hover-country">Hover over a country</span>
+    </div>
+  </section>
+
+  <!-- SIDE PANEL -->
+  <aside class="side-panel" id="side-panel">
+    <!-- Layer Controls -->
+    <div class="panel-section">
+      <h3 class="section-title">Risk Layers</h3>
+      <div class="layer-toggles" id="layer-toggles">
+        <button class="layer-btn active" data-layer="composite">
+          <span class="layer-dot composite-dot"></span>
+          Composite Risk
+        </button>
+        <button class="layer-btn" data-layer="temperature">
+          <span class="layer-dot temp-dot"></span>
+          Temperature Anomaly
+        </button>
+        <button class="layer-btn" data-layer="pollution">
+          <span class="layer-dot pollution-dot"></span>
+          Air Pollution (PM2.5)
+        </button>
+        <button class="layer-btn" data-layer="water">
+          <span class="layer-dot water-dot"></span>
+          Water Stress
+        </button>
+        <button class="layer-btn" data-layer="poverty">
+          <span class="layer-dot poverty-dot"></span>
+          Poverty Rate
+        </button>
+        <button class="layer-btn" data-layer="inequality">
+          <span class="layer-dot inequality-dot"></span>
+          Wealth Inequality
+        </button>
+        <button class="layer-btn" data-layer="population">
+          <span class="layer-dot population-dot"></span>
+          Population Growth
+        </button>
+      </div>
+    </div>
+
+    <!-- Country Detail -->
+    <div class="panel-section" id="country-detail-section">
+      <h3 class="section-title">Country Profile</h3>
+      <div class="country-detail" id="country-detail">
+        <h4 id="detail-country-name">Click a country</h4>
+        <div class="detail-grid" id="detail-grid">
+          <div class="detail-item"><span class="detail-label">Population</span><span class="detail-value" id="det-pop">—</span></div>
+          <div class="detail-item"><span class="detail-label">ΔT Anomaly</span><span class="detail-value" id="det-temp">—</span></div>
+          <div class="detail-item"><span class="detail-label">PM2.5</span><span class="detail-value" id="det-pm25">—</span></div>
+          <div class="detail-item"><span class="detail-label">Water Stress</span><span class="detail-value" id="det-water">—</span></div>
+          <div class="detail-item"><span class="detail-label">Poverty Rate</span><span class="detail-value" id="det-poverty">—</span></div>
+          <div class="detail-item"><span class="detail-label">Gini Index</span><span class="detail-value" id="det-gini">—</span></div>
+          <div class="detail-item"><span class="detail-label">Risk Tier</span><span class="detail-value" id="det-risk">—</span></div>
+          <div class="detail-item"><span class="detail-label">Pop. Growth</span><span class="detail-value" id="det-growth">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trend Chart -->
+    <div class="panel-section">
+      <h3 class="section-title">Risk Trajectory</h3>
+      <div class="chart-container">
+        <canvas id="trend-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Regional Breakdown -->
+    <div class="panel-section">
+      <h3 class="section-title">Regional Risk Breakdown</h3>
+      <div class="chart-container">
+        <canvas id="regional-chart"></canvas>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<!-- ========== TIMELINE BAR ========== -->
+<footer class="timeline-bar">
+  <div class="timeline-controls">
+    <button class="timeline-btn" id="btn-play" title="Play/Pause simulation">▶</button>
+    <button class="timeline-btn" id="btn-speed-down" title="Slow down">−</button>
+    <span class="speed-label" id="speed-label">1 yr/s</span>
+    <button class="timeline-btn" id="btn-speed-up" title="Speed up">+</button>
+    <button class="timeline-btn" id="btn-reset" title="Reset to 2025">⟲</button>
+  </div>
+  <div class="timeline-slider-container">
+    <span class="timeline-year" id="year-start">2025</span>
+    <input type="range" class="timeline-slider" id="timeline-slider" min="2025" max="2100" value="2025" step="1">
+    <span class="timeline-year" id="year-end">2100</span>
+  </div>
+  <div class="timeline-year-display" id="year-display">2025</div>
+</footer>
+
+<!-- ========== SCRIPTS ========== -->
+<script src="js/data.js"></script>
+<script src="js/map.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
